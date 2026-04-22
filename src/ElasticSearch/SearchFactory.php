@@ -7,6 +7,7 @@ use Laravel\Scout\Builder;
 use ONGR\ElasticsearchDSL\BuilderInterface;
 use ONGR\ElasticsearchDSL\Query\Compound\BoolQuery;
 use ONGR\ElasticsearchDSL\Query\FullText\QueryStringQuery;
+use ONGR\ElasticsearchDSL\Query\TermLevel\RangeQuery;
 use ONGR\ElasticsearchDSL\Query\TermLevel\TermQuery;
 use ONGR\ElasticsearchDSL\Query\TermLevel\TermsQuery;
 use ONGR\ElasticsearchDSL\Search;
@@ -70,15 +71,75 @@ final class SearchFactory
     private static function addWheres($builder, $boolQuery): BoolQuery
     {
         if (static::hasWheres($builder)) {
-            foreach ($builder->wheres as $field => $value) {
-                if (! ($value instanceof BuilderInterface)) {
-                    $value = new TermQuery((string) $field, $value);
+            foreach ($builder->wheres as $key => $where) {
+                [$field, $operator, $value] = static::normalizeWhere($key, $where);
+
+                if ($value instanceof BuilderInterface) {
+                    $boolQuery->add($value, BoolQuery::FILTER);
+
+                    continue;
                 }
-                $boolQuery->add($value, BoolQuery::FILTER);
+
+                $boolQuery->add(static::buildWhereQuery($field, $operator, $value), BoolQuery::FILTER);
             }
         }
 
         return $boolQuery;
+    }
+
+    /**
+     * Normalize a single where clause to a [field, operator, value] tuple.
+     *
+     * Supports both Scout >= 11 (list of ['field', 'operator', 'value'] arrays)
+     * and the legacy associative format used by Scout <= 10.
+     *
+     * @param  int|string  $key
+     * @param  mixed  $where
+     * @return array{0: string, 1: string, 2: mixed}
+     */
+    private static function normalizeWhere($key, $where): array
+    {
+        if (is_array($where) && array_key_exists('field', $where)) {
+            return [
+                (string) $where['field'],
+                (string) ($where['operator'] ?? '='),
+                $where['value'] ?? null,
+            ];
+        }
+
+        return [(string) $key, '=', $where];
+    }
+
+    /**
+     * Build the underlying Elasticsearch query for a normalized where clause.
+     *
+     * @param  string  $field
+     * @param  string  $operator
+     * @param  mixed  $value
+     * @return BuilderInterface
+     */
+    private static function buildWhereQuery(string $field, string $operator, $value): BuilderInterface
+    {
+        switch ($operator) {
+            case '=':
+                return new TermQuery($field, $value);
+            case '!=':
+            case '<>':
+                $bool = new BoolQuery();
+                $bool->add(new TermQuery($field, $value), BoolQuery::MUST_NOT);
+
+                return $bool;
+            case '>':
+                return new RangeQuery($field, [RangeQuery::GT => $value]);
+            case '>=':
+                return new RangeQuery($field, [RangeQuery::GTE => $value]);
+            case '<':
+                return new RangeQuery($field, [RangeQuery::LT => $value]);
+            case '<=':
+                return new RangeQuery($field, [RangeQuery::LTE => $value]);
+            default:
+                return new TermQuery($field, $value);
+        }
     }
 
     /**

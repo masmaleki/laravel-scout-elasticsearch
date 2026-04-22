@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/)
 
+## [2.0.0] - 2026-04-22
+> Fork published as `masmaleki/laravel-scout-elasticsearch`. Major version reset; supersedes the upstream `7.12.x` line for the masmaleki distribution.
+### Changed
+- **BREAKING**: Minimum PHP bumped to `^8.3` (supports PHP 8.3 and 8.4).
+- **BREAKING**: Requires `laravel/scout: ^11.0` (Laravel 11 / 12 / 13).
+- **BREAKING**: Requires `elasticsearch/elasticsearch: ^8.16|^9.0` (PHP 8.4 ready, optional drop of Guzzle on v9).
+- Bumped `handcraftedinthealps/elasticsearch-dsl` to `^8.3`.
+- Adapted `SearchFactory` to Scout 11's new `wheres` array format (`['field', 'operator', 'value']`) while keeping backward compatibility with the legacy associative format.
+- Added support for the comparison operators `>`, `>=`, `<`, `<=`, `!=`/`<>` introduced by Scout 11, mapped to Elasticsearch range queries.
+### Dev
+- PHPUnit upgraded to `^11.0|^12.0`; `phpunit.xml.dist` migrated to the PHPUnit 11 schema (`<source>` instead of `<filter><whitelist>`, deprecated attributes removed).
+- Orchestra Testbench upgraded to `^9.0|^10.0|^11.0`.
+- Replaced `nunomaduro/larastan` with `larastan/larastan: ^3.0`; PHPStan config updated accordingly.
+- Removed obsolete `laravel/legacy-factories` dependency.
+- CI matrix rewritten to test PHP 8.3 / 8.4 against Laravel 11 / 12 / 13 and Elasticsearch 8.15.
+
 ## [7.12.0] - 2025-08-26
 ### Changed
 - Removed `roave/better-reflection` dependency and replaced usage with native PHP reflection in `SearchableListFactory`, reducing package size while maintaining behavior. [#314](https://github.com/matchish/laravel-scout-elasticsearch/pull/314)

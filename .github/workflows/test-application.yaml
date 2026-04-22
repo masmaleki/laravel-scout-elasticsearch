@@ -5,10 +5,11 @@ on:
     push:
         branches:
             - master
+            - main
 
 jobs:
     php:
-        name: 'Run tests with php ${{ matrix.php-version }}'
+        name: 'PHP ${{ matrix.php-version }} / Laravel ${{ matrix.laravel }}'
         runs-on: ubuntu-latest
 
         strategy:
@@ -16,13 +17,21 @@ jobs:
             max-parallel: 1  # all versions are using same elasticsearch and mysql service. They need to run 1 by 1.
             matrix:
                 include:
-                    - php-version: '8.0.16'
-                    - php-version: '8.1'
-                    - php-version: '8.2'
                     - php-version: '8.3'
+                      laravel: '11.*'
+                      testbench: '9.*'
+                    - php-version: '8.3'
+                      laravel: '12.*'
+                      testbench: '10.*'
+                    - php-version: '8.3'
+                      laravel: '13.*'
+                      testbench: '11.*'
+                    - php-version: '8.4'
+                      laravel: '13.*'
+                      testbench: '11.*'
         services:
             elasticsearch:
-                image: docker.elastic.co/elasticsearch/elasticsearch:7.17.28
+                image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
                 ports:
                     - 9200:9200
                 env:
@@ -30,7 +39,7 @@ jobs:
                     xpack.security.enabled: 'false'
                 options: --health-cmd="curl http://localhost:9200/_cluster/health" --health-interval=10s --health-timeout=5s --health-retries=5
             mysql:
-                image: mysql:5.7.22
+                image: mysql:8.0
                 env:
                     MYSQL_ALLOW_EMPTY_PASSWORD: yes
                     MYSQL_DATABASE: unittest
@@ -40,7 +49,7 @@ jobs:
 
         steps:
             -   name: Checkout project
-                uses: actions/checkout@v2
+                uses: actions/checkout@v4
 
             -   name: Install and configure PHP
                 uses: shivammathur/setup-php@v2
@@ -50,20 +59,21 @@ jobs:
 
             -   name: Get composer cache directory
                 id: composer-cache-dir
-                run: echo "::set-output name=dir::$(composer config cache-files-dir)"
+                run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
             -   name: Cache dependencies
                 uses: actions/cache@v4
                 id: composer-cache
                 with:
                     path: ${{ steps.composer-cache-dir.outputs.dir }}
-                    key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+                    key: ${{ runner.os }}-php${{ matrix.php-version }}-laravel${{ matrix.laravel }}-${{ hashFiles('composer.json') }}
                     restore-keys: |
-                        ${{ runner.os }}-composer-
+                        ${{ runner.os }}-php${{ matrix.php-version }}-
 
             -   name: Install dependencies
                 run: |
                     composer validate --strict
+                    composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-update --no-interaction
                     composer install --no-interaction --prefer-dist
 
             -   name: Run tests
@@ -73,12 +83,11 @@ jobs:
                     DB_USERNAME: root
                     ELASTICSEARCH_HOST: '127.0.0.1:9200'
 
-            - name: Upload coverage results
-              uses: actions/upload-artifact@v4
-              if: matrix.php-version == '8.3'
-              with:
-                  name: coverage-report
-                  path: coverage.xml
-                  retention-days: 1
-                  compression-level: 9
-            
+            -   name: Upload coverage results
+                uses: actions/upload-artifact@v4
+                if: matrix.php-version == '8.4' && matrix.laravel == '13.*'
+                with:
+                    name: coverage-report
+                    path: coverage.xml
+                    retention-days: 1
+                    compression-level: 9
